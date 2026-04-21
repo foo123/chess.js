@@ -1,45 +1,30 @@
 "use strict";
 
-// use: node tournament.js [stockfish|sunfish|ab|mtdf|bns|mcts|abbns|mtdfbns|abmcts|mtdfmcts] [stockfish|sunfish|ab|mtdf|bns|mcts|abbns|mtdfbns|abmcts|mtdfmcts] nmatches --depth=DEPTH --bns=BNS --mcts=MCTS --uct=UCT --iter=ITER --deepen --show --elo=ELO
+// use: node tournament.js [stockfish|sunfish|ab|mtdf|bns|mcts|abbns|mtdfbns|abmcts|mtdfmcts] [stockfish|sunfish|ab|mtdf|bns|mcts|abbns|mtdfbns|abmcts|mtdfmcts] nmatches --show --deepen --depth=DEPTH --bns=BNS --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO
 
 // In tournament of 10 match(es) between STOCKFISH 16.1 (ELO1900) and SUNFISH 2023 result is 8 - 2 (min.moves 46,max.moves 128)
 // In tournament of 10 match(es) between STOCKFISH 18 (ELO1900) and SUNFISH 2023 result is 7 - 3 (min.moves 36,max.moves 86)
 
-// In tournament of 4 match(es) between AB-245-d and SUNFISH 2023 result is 1.5 - 2.5 (min.moves 12,max.moves 127)
-
-// In tournament of 5 match(es) between MTDf-245-d and SUNFISH 2023 result is 1.5 - 3.5
-
-// In tournament of 10 match(es) between BNS-7 and SUNFISH 2023 result is 3 - 7 (min.moves 26,max.moves 106)
-// In tournament of 7 match(es) between BNS-245-d and SUNFISH 2023 result is 1.5 - 5.5
-
-// In tournament of 10 match(es) between MCTS-25-2-500 and SUNFISH 2023 result is 5 - 5 (min.moves 26,max.moves 123)
-// In tournament of 10 match(es) between MCTS-25-3-500 and SUNFISH 2023 result is 4.5 - 5.5 (min.moves 8,max.moves 150)
-// In tournament of 10 match(es) between MCTS-25-5-500 and SUNFISH 2023 result is 5.5 - 4.5 (min.moves 38,max.moves 130)
-// In tournament of 10 match(es) between MCTS-25-2-500 and SUNFISH 2023 result is 3 - 7 (min.moves 46,max.moves 106)
-// In tournament of 10 match(es) between MCTS-35-5-800 and SUNFISH 2023 result is 5.5 - 4.5 (min.moves 32,max.moves 112)
-
-// In tournament of 4 match(es) between ABMCTS-25-3-0-100 and SUNFISH 2023 result is 3 - 1 (min.moves 20,max.moves 76)
-// In tournament of 10 match(es) between ABMCTS-25-3-0-100 and SUNFISH 2023 result is 5 - 5 (min.moves 34,max.moves 174)
-// In tournament of 10 match(es) between ABMCTS-25-3-4-200 and SUNFISH 2023 result is 6.5 - 3.5 (min.moves 44,max.moves 134)
-// In tournament of 10 match(es) between ABMCTS-25-3-4-300 and SUNFISH 2023 result is 6 - 4 (min.moves 48,max.moves 138)
-
-// In tournament of 6 match(es) between AB-245-d and MCTS-25-4-500 result is 0 - 6 (min.moves 9,max.moves 59)
-// In tournament of 6 match(es) between MTDf-245-d and MCTS-25-4-500 result is 3 - 3 (min.moves 46,max.moves 144)
-// In tournament of 6 match(es) between BNS-245-d and MCTS-25-4-500 result is 0 - 6 (min.moves 13,max.moves 62)
-// In tournament of 5 match(es) between ABMCTS-25-3-4-300 and MCTS-25-4-300 result is 5 - 0
+// In tournament of 6 match(es) between AB-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 18,max.moves 116)
+// In tournament of 6 match(es) between MTDf-245-d and SUNFISH 2023 result is 3 - 3 (min.moves 26,max.moves 128)
+// In tournament of 6 match(es) between MTDf-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 32,max.moves 124)
+// In tournament of 6 match(es) between BNS-5 and SUNFISH 2023 result is 2.5 - 3.5 (min.moves 30,max.moves 132)
+// In tournament of 6 match(es) between BNS-6 and SUNFISH 2023 result is 2 - 4 (min.moves 20,max.moves 108)
+// In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 3 - 3 (min.moves 26,max.moves 118)
+// In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 4 - 2 (min.moves 32,max.moves 72)
 
 const args = (function parse_args() {
     const args = {
-        PLAYER1:        'mcts',
-        PLAYER2:        'ab',
+        PLAYER1:        'ab',
+        PLAYER2:        'sunfish',
         NUM_MATCHES:    2,
+        SHOW:           false,
+        DEEPEN:         false,
         DEPTH:          3,
         BNS:            Infinity,
         MCTS:           Infinity,
         UCT:            0,
         ITER:           100,
-        DEEPEN:         false,
-        SHOW:           false,
         ELO:            1500
     };
 
@@ -56,8 +41,8 @@ const args = (function parse_args() {
         'stockfish'
     ];
 
-    args.PLAYER1 = (process.argv[2] || 'mcts').trim().toLowerCase();
-    args.PLAYER2 = (process.argv[3] || 'ab').trim().toLowerCase();
+    args.PLAYER1 = (process.argv[2] || 'ab').trim().toLowerCase();
+    args.PLAYER2 = (process.argv[3] || 'sunfish').trim().toLowerCase();
 
     if (-1 === supported_engines.indexOf(args.PLAYER1) || -1 === supported_engines.indexOf(args.PLAYER2))
     {
@@ -70,13 +55,13 @@ const args = (function parse_args() {
     let i = 5;
     while (process.argv.length > i)
     {
+        if ('--show' === process.argv[i].toLowerCase()) args.SHOW = true;
+        if ('--deepen' === process.argv[i].slice(0, 8).toLowerCase()) args.DEEPEN = true;
         if ('--depth=' === process.argv[i].slice(0, 8).toLowerCase()) args.DEPTH = parseInt(process.argv[i].slice(8).trim()) || 0;
         if ('--bns=' === process.argv[i].slice(0, 6).toLowerCase()) args.BNS = parseInt(process.argv[i].slice(6).trim()) || 0;
         if ('--mcts=' === process.argv[i].slice(0, 7).toLowerCase()) args.MCTS = parseInt(process.argv[i].slice(7).trim()) || 0;
         if ('--uct=' === process.argv[i].slice(0, 6).toLowerCase()) args.UCT = parseInt(process.argv[i].slice(6).trim()) || 0;
         if ('--iter=' === process.argv[i].slice(0, 7).toLowerCase()) args.ITER = parseInt(process.argv[i].slice(7).trim()) || 100;
-        if ('--deepen' === process.argv[i].slice(0, 8).toLowerCase()) args.DEEPEN = true;
-        if ('--show' === process.argv[i].toLowerCase()) args.SHOW = true;
         if ('--elo=' === process.argv[i].slice(0, 6).toLowerCase()) args.ELO = parseInt(process.argv[i].slice(6).trim()) || 1500;
         ++i;
     }
@@ -91,14 +76,14 @@ const engine = {
     stockfish:  null
 };
 const opts = {
-    ab:        {algo:"ab", iterativedeepening:true, depth:245, time:10000},
-    mtdf:      {algo:"mtdf", iterativedeepening:true, depth:245, time:10000},
-    bns:       {algo:"bns", iterativedeepening:true, depth:245, time:10000},
-    mcts:      {algo:"mcts", iterations:args.ITER, uct:args.UCT, depth:args.DEPTH, time:10000},
-    abbns:     {algo:"ab", bns:args.BNS, depth:args.DEPTH, time:10000},
-    mtdfbns:   {algo:"mtdf", bns:args.BNS, depth:args.DEPTH, time:10000},
-    abmcts:    {algo:"ab", mcts:args.MCTS, uct:args.UCT, iterations:args.ITER, depth:args.DEPTH, time:10000},
-    mtdfmcts:  {algo:"mtdf", mcts:args.MCTS, uct:args.UCT, iterations:args.ITER, depth:args.DEPTH, time:10000},
+    ab:        {algo:"ab", iterativedeepening:true, depth:245, time:10000, log:args.SHOW},
+    mtdf:      {algo:"mtdf", iterativedeepening:true, depth:245, time:10000, log:args.SHOW},
+    bns:       {algo:"bns", iterativedeepening:args.DEEPEN, depth:args.DEPTH, time:10000, log:args.SHOW},
+    mcts:      {algo:"mcts", iterations:args.ITER, uct:args.UCT, depth:args.DEPTH, time:10000, log:args.SHOW},
+    abbns:     {algo:"ab", bns:args.BNS, depth:args.DEPTH, time:10000, log:args.SHOW},
+    mtdfbns:   {algo:"mtdf", bns:args.BNS, depth:args.DEPTH, time:10000, log:args.SHOW},
+    abmcts:    {algo:"ab", mcts:args.MCTS, uct:args.UCT, iterations:args.ITER, depth:args.DEPTH, time:10000, log:args.SHOW},
+    mtdfmcts:  {algo:"mtdf", mcts:args.MCTS, uct:args.UCT, iterations:args.ITER, depth:args.DEPTH, time:10000, log:args.SHOW},
     sunfish:   {depth:245, time:10000},
     stockfish: {elo:args.ELO, depth:245, time:10000}
 };
@@ -173,8 +158,8 @@ const player = {
     mtdfbns:    'MTDBNS-'+String(opts.mtdfbns.depth)+'-'+String(opts.mtdfbns.bns),
     abmcts:     'ABMCTS-'+String(opts.abmcts.depth)+'-'+String(opts.abmcts.mcts)+'-'+String(opts.abmcts.uct)+'-'+String(opts.abmcts.iterations),
     mtdfmcts:   'MTDMCTS-'+String(opts.mtdfmcts.depth)+'-'+String(opts.mtdfmcts.mcts)+'-'+String(opts.mtdfmcts.uct)+'-'+String(opts.mtdfmcts.iterations),
-    stockfish:  'STOCKFISH 18 (ELO'+String(opts.stockfish.elo)+')',
-    sunfish:    'SUNFISH 2023'
+    sunfish:    'SUNFISH 2023',
+    stockfish:  'STOCKFISH 18 (ELO'+String(opts.stockfish.elo)+')'
 };
 
 function tournament(match, matches_won_by_p1, min_plies, max_plies, done)

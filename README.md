@@ -26,7 +26,7 @@ Methods:
 * Monte Carlo Tree Search
 * Hybrids of above methods
 
-A user-defined evaluation function can be used, else a custom-crafted evaluation function is used which, although simple and fast, produces quite good results.
+A user-defined evaluation function can be used, else a custom-crafted evaluation function is used which, although simple and fast, produces quite good results (see `tournament.js` for some tentative results).
 
 Related References:
 1. "An analysis of alpha-beta pruning", Donald E. Knuth, Ronald W. Moore

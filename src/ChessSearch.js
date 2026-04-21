@@ -83,20 +83,18 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
         board = self.game.getBoard().clone(),
         opponent = OPPOSITE[color],
         moves = shuffle(board.all_moves_for(color, true)),
-        i = 0,
         n = moves.length,
         moves_next = new Array(n),
         scores = new Array(n),
-        max = -Infinity,
         best_moves = [],
-        best_move = [],
         opts = {},
-        stopped,
-        start = 0, now = 0,
+        log, stopped,
+        start = 0,
         time, time_limit,
         has_timelimit = false,
         do_next = null, ret = null;
 
+    log = self.opts.log;
     stopped = self.opts.stopped || return_false;
     time_limit = (BLACK === color ? self.opts.btime : self.opts.wtime) || self.opts.time || Infinity;
 
@@ -105,23 +103,21 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
     opts.eval_move = self.opts.eval_move || eval_move;
     opts.MATE = opts.eval_pos ? (opts.eval_pos.MATE) : (opts.eval_move.MATE);
 
-    opts.depth = stdMath.max(self.opts.depth || 0, 1);
+    opts.depth = stdMath.max((+self.opts.depth) || 0, 1);
     opts.depthM = opts.depth;
 
     opts.depthBNS = null != self.opts.bns ? +self.opts.bns : Infinity;
     opts.depthMCTS = null != self.opts.mcts ? +self.opts.mcts : Infinity;
-    opts.depthUCT = +(self.opts.uct || 0);
+    opts.depthUCT = (+self.opts.uct) || 0;
     opts.iterations = null != self.opts.iterations ? +self.opts.iterations : 100;
 
     opts.uct = 0 < opts.depthUCT ? {} : null; // uct stats storage, if needed
     opts.tt = {}; // transposition table, where needed, as needed
 
     opts.f = 0;
-    opts.f0 = 0;
 
     opts.iterativedeepening = self.opts.iterativedeepening;
-    if (opts.iterativedeepening) opts.depth = stdMath.min(2, opts.depthM); // iterative deepening
-
+    if (opts.iterativedeepening && ("mcts" !== opts.algo)) opts.depth = stdMath.min(2, opts.depthM); // iterative deepening
     opts.heuristicpruning = "ab" === opts.algo && opts.depthMCTS > opts.depthM && opts.depthBNS > opts.depthM;
 
     if (is_function(self.opts.cb))
@@ -170,90 +166,110 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
     return do_next(function next() {
         if (stopped()) return ret(null);
 
-        if (i >= n)
+        if ((1 < n) && (opts.depth <= opts.depthM))
         {
-            if ((n > 0) && (opts.depth <= opts.depthM))
-            {
-                best_moves = best_move;
+            var i, curr, score, test, max = -Infinity,
+                alpha = -opts.MATE, beta = opts.MATE,
+                mov, move, newcount, best_move, now, not_done;
+
+            do {
+                not_done = false;
                 best_move = [];
-            }
+                test = alpha + (beta - alpha) * (n - 1) / n;
+                newcount = 0;
+
+                for (i=0; i<n; ++i)
+                {
+                    if (has_timelimit && opts.iterativedeepening && (perf.now() - start > time))
+                    {
+                        // time limit exceeded
+                        if (log) console.log('time:'+stdMath.floor(perf.now() - start)+', limit:'+time_limit);
+                        return ret(board.encode_move(random_choice(best_move.length && ((i+1 >= 0.75*n) || !best_moves.length) ? best_move : (best_moves.length ? best_moves : moves), null)));
+                    }
+
+                    mov = moves[i];
+                    move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
+                    if (!moves_next[i]) moves_next[i] = board.all_moves_for(opponent, true);
+                    curr = opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next[i].length);
+
+                    switch (opts.algo)
+                    {
+                        case "mcts":
+                        score = mcts(opts, board, opponent, 2, -1, moves_next[i], curr);
+                        if (score > max) {max = score; best_move = [mov];}
+                        else if (score === max) {best_move.push(mov);}
+                        break;
+
+                        case "bns":
+                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], curr, test-1, test);
+                        if (score >= test)
+                        {
+                            ++newcount;
+                            best_move.push(mov);
+                        }
+                        break;
+
+                        case "mtdf":
+                        opts.f = scores[i];
+                        score = mtdf(opts, board, opponent, 2, -1, moves_next[i], curr);
+                        if (score > max) {max = score; best_move = [mov];}
+                        else if (score === max) {best_move.push(mov);}
+                        break;
+
+                        default:
+                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], curr, -Infinity, Infinity);
+                        if (score > max) {max = score; best_move = [mov];}
+                        else if (score === max) {best_move.push(mov);}
+                        break;
+                    }
+
+                    scores[i] = score;
+                    board.unmove(move);
+                }
+
+                if ("bns" === opts.algo)
+                {
+                    // update alpha-beta range
+                    if (newcount > n/2)
+                    {
+                        alpha = test > alpha ? test : (test+1);
+                    }
+                    else
+                    {
+                        beta = test < beta ? test : (test-1);
+                    }
+                    not_done = !((alpha+2 > beta) || (1 === newcount));
+                }
+            } while (not_done);
+
+            best_moves = best_move;
 
             if (has_timelimit)
             {
                 now = perf.now();
-                console.log('time:'+stdMath.floor(now - start)+', limit:'+time_limit);
+                if (log) console.log('time:'+stdMath.floor(now - start)+', limit:'+time_limit);
                 if (now - start > time) return ret(board.encode_move(random_choice(best_moves, null)));
             }
 
             if (opts.iterativedeepening)
             {
-                if (opts.depth >= opts.depthMCTS) return ret(board.encode_move(random_choice(best_moves, null)));
+                if (opts.depth >= opts.depthM || opts.depth >= opts.depthMCTS) return ret(board.encode_move(random_choice(best_moves, null)));
                 order_moves(scores, moves, moves_next); // move ordering
                 opts.depth += 2; // search deeper next time
-                // reset
-                i = 0;
-                max = -Infinity;
                 opts.tt = {}; // reset transposition table ??
+                return do_next(next);
             }
         }
 
-        if ((i < n) && (opts.depth <= opts.depthM))
-        {
-            if (has_timelimit && opts.iterativedeepening && (perf.now() - start > time))
-            {
-                // time limit exceeded
-                return ret(board.encode_move(random_choice(i+1 >= 0.75*n ? best_move : best_moves, null)));
-            }
-
-            var score = 0, mov = moves[i],
-                move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
-
-            if (!moves_next[i]) moves_next[i] = board.all_moves_for(opponent, true);
-
-            score = (opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next[i].length));
-
-            if (null == score[i])
-            {
-                opts.f = 0;
-                opts.f0 = 0;
-            }
-            else
-            {
-                opts.f = score[i];
-                opts.f0 = opts.f - score;
-            }
-
-            score += evaluate(opts, board, opponent, 2, -1, moves_next[i]);
-            scores[i] = score;
-
-            board.unmove(move);
-
-            if (score > max) {max = score; best_move = [mov];}
-            else if (score === max) {best_move.push(mov);}
-
-            ++i; return do_next(next);
-        }
-        else
-        {
-            return ret(board.encode_move(random_choice(best_moves, null)));
-        }
+        return ret(board.encode_move(random_choice(best_moves.length ? best_moves : moves, null)));
     });
 };
 
 // search algorithms -------------------
-function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
+function alphabeta(opts, board, color, depth, sgn, moves, curr, alpha, beta)
 {
     // Alpha Beta Search with Transposition Table algorithm
     var moves_next, i, n, mov, move, key, tp, score, value, opponent = OPPOSITE[color], a, b;
-    if (depth >= opts.depth)
-    {
-        return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : 0;
-    }
-    if (!moves) moves = board.all_moves_for(color, true);
-    if (!moves.length)
-    {
-        return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : 0;
-    }
 
     key = board.key();
     tp = opts.tt[key];
@@ -267,13 +283,17 @@ function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
         beta = stdMath.min(beta, tp.hi);
     }
 
-    if (depth >= opts.depthMCTS)
+    if (depth >= opts.depth || !moves.length)
     {
-        value = mcts(opts, board, color, depth, sgn, moves);
+        value = opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : curr;
+    }
+    else if (depth >= opts.depthMCTS)
+    {
+        value = mcts(opts, board, color, depth, sgn, moves, curr);
     }
     else if (depth >= opts.depthBNS)
     {
-        value = bns(opts, board, color, depth, sgn, moves, alpha, beta);
+        value = bns(opts, board, color, depth, sgn, moves, curr, alpha, beta);
     }
     else
     {
@@ -282,15 +302,15 @@ function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
             // speed up by heuristic pruning
             if ((depth > 14) && (moves.length > 4))
             {
-                moves = best_n_moves(4, moves, board, color, sgn);
+                moves = best_n_moves(4, moves, board, color);
             }
             if ((depth > 9) && (moves.length > 7))
             {
-                moves = best_n_moves(7, moves, board, color, sgn);
+                moves = best_n_moves(7, moves, board, color);
             }
             if ((depth > 4) && (moves.length > 15))
             {
-                moves = best_n_moves(15, moves, board, color, sgn);
+                moves = best_n_moves(15, moves, board, color);
             }
         }
 
@@ -304,8 +324,8 @@ function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
                 mov = moves[i];
                 move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
                 moves_next = board.all_moves_for(opponent, true);
-                score = sgn*(opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next.length));
-                value = stdMath.max(value, score+alphabeta(opts, board, opponent, depth+1, -sgn, moves_next, a, beta))
+                score = opts.eval_pos ? 0 : (curr + sgn*opts.eval_move(board, color, move, moves_next.length));
+                value = stdMath.max(value, alphabeta(opts, board, opponent, depth+1, -sgn, moves_next, score, a, beta))
                 board.unmove(move);
                 if (value >= beta) break; // beta cutoff
                 a = stdMath.max(a, value);
@@ -320,8 +340,8 @@ function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
                 mov = moves[i];
                 move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
                 moves_next = board.all_moves_for(opponent, true);
-                score = sgn*(opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next.length));
-                value = stdMath.min(value, score+alphabeta(opts, board, opponent, depth+1, -sgn, moves_next, alpha, b));
+                score = opts.eval_pos ? 0 : (curr + sgn*opts.eval_move(board, color, move, moves_next.length));
+                value = stdMath.min(value, alphabeta(opts, board, opponent, depth+1, -sgn, moves_next, score, alpha, b));
                 board.unmove(move);
                 if (value <= alpha) break; // alpha cutoff
                 b = stdMath.min(b, value);
@@ -355,116 +375,99 @@ function alphabeta(opts, board, color, depth, sgn, moves, alpha, beta)
 
     return value;
 }
-function mtdf(opts, board, color, depth, sgn, moves)
+function mtdf(opts, board, color, depth, sgn, moves, curr)
 {
     // MTD(f) Search algorithm
-    var g = opts.f || 0, hi = Infinity, lo = -Infinity, beta;
+    var value = opts.f || 0, hi = Infinity, lo = -Infinity, beta, iter = 0;
     do {
-        beta = g === lo ? g + 1 : g;
-        g = alphabeta(opts, board, color, depth, sgn, moves, beta-1, beta);
-        if (g < beta) hi = g; else lo = g;
-    } while (lo+5 < hi);
-    return g;
+        ++iter;
+        beta = value === lo ? value+1 : value;
+        value = alphabeta(opts, board, color, depth, sgn, moves, curr, beta-1, beta);
+        if (value < beta) hi = value; else lo = value;
+    } while ((lo+2 < hi) || (iter < 200));
+    return value;
 }
-function bns(opts, board, color, depth, sgn, moves, alpha, beta)
+function bns(opts, board, color, depth, sgn, moves, curr, alpha, beta)
 {
     // Best Node Search algorithm
-    var moves_next, i, n, mov, move,
+    var i, n = moves.length, moves_next, mov, move,
         score, opponent = OPPOSITE[color],
         test, count, newcount, value;
-    if (depth >= opts.depth)
+    if (depth >= opts.depth || !n)
     {
-        return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : 0;
-    }
-    if (!moves) moves = board.all_moves_for(color, true);
-    if (!moves.length)
-    {
-        return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : 0;
-    }
-    n = moves.length;
-    moves_next = new Array(n);
-    count = n;
-    if (null == alpha)
-    {
-        alpha = -opts.MATE;
-        beta = opts.MATE;
-        // previous best guess
-        test = opts.f0 || 0;
+        value = opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : curr;
     }
     else
     {
-        // next guess
-        test = alpha + (beta - alpha) * /*stdMath.random()*/(count - 1) / count;
-    }
-    do {
-        newcount = 0;
-        value = -Infinity;
-        for (i=0; i<n; ++i)
+        moves_next = new Array(n);
+        count = n;
+        if (null == alpha)
         {
-            mov = moves[i];
-            move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
-            if (!moves_next[i]) moves_next[i] = board.all_moves_for(opponent, true);
-            score = sgn*(opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next[i].length));
-            score += alphabeta(opts, board, opponent, depth+1, -sgn, moves_next[i], test-1, test);
-            board.unmove(move);
-            if (score >= test)
+            alpha = -opts.MATE;
+            beta = opts.MATE;
+        }
+        do {
+            // next guess
+            test = alpha + (beta - alpha) * /*stdMath.random()*/(count - 1) / count;
+            newcount = 0;
+            value = -Infinity;
+            for (i=0; i<n; ++i)
             {
-                ++newcount;
-                value = stdMath.max(value, score);
+                mov = moves[i];
+                move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
+                if (!moves_next[i]) moves_next[i] = board.all_moves_for(opponent, true);
+                score = opts.eval_pos ? 0 : (curr + sgn*opts.eval_move(board, color, move, moves_next[i].length));
+                score = alphabeta(opts, board, opponent, depth+1, -sgn, moves_next[i], score, test-1, test);
+                board.unmove(move);
+                if (score >= test)
+                {
+                    ++newcount;
+                    value = stdMath.max(value, score);
+                }
             }
-        }
-        // update alpha-beta range
-        if (count === newcount)
-        {
-            alpha = test > alpha ? test : (test+1);
-        }
-        else if (0 === newcount)
-        {
-            beta = test < beta ? test : (test-1);
-        }
-        else if (test < beta)
-        {
-            beta = test;
-        }
-        else
-        {
-            alpha = test > alpha ? test : (test+1);
-        }
-        // update number of sub-trees that exceeds separation test value
-        count = 0 < newcount ? newcount : count;
-        // next guess
-        test = alpha + (beta - alpha) * /*stdMath.random()*/(count - 1) / count;
-    } while (!(2 > beta - alpha || 1 === newcount));
-
+            // update alpha-beta range
+            if (newcount > count/2)
+            {
+                alpha = test > alpha ? test : (test+1);
+            }
+            else
+            {
+                beta = test < beta ? test : (test-1);
+            }
+            // update number of sub-trees that exceeds separation test value
+            //count = 0 < newcount ? newcount : count;
+        } while (!((alpha+2 > beta) || (1 === newcount)));
+    }
     return value;
 }
-function mcts(opts, board, color, depth, sgn, moves)
+function mcts(opts, board, color, depth, sgn, moves, curr)
 {
     // Monte Carlo Tree Search with UCT algorithm
     var i, iter, score, value;
     for (score=0,i=0,iter=opts.iterations; i<iter; ++i)
     {
-        score += mcts_playout(opts, board, color, depth, sgn, moves);
+        score += mcts_playout(opts, board, color, depth, sgn, moves, curr);
     }
     value = score / iter;
     return value;
 }
-function mcts_playout(opts, board, color, depth, sgn, moves)
+function mcts_playout(opts, board, color, depth, sgn, moves, curr)
 {
-    if (depth >= opts.depthM) return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : 0;
-    if (!moves) moves = board.all_moves_for(color, true);
-    if (!moves.length) return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : 0;
+    var mov, move, moves_next, score, value, i, w, d, uct;
+    if (depth >= opts.depthM || !moves.length)
+    {
+        return opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : curr;
+    }
     if (depth+1 >= opts.depthM)
     {
         // return avg of all moves on remaining stages
         return moves.reduce(function(score, mov) {
             var move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
-            score += opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : (sgn*opts.eval_move(board, color, move, null));
+            score += opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : (curr + sgn*opts.eval_move(board, color, move, null));
             board.unmove(move);
             return score;
         }, 0)/moves.length;
     }
-    var mov, move, moves_next, value, i, w, d, uct;
     if (depth <= opts.depthUCT)
     {
         uct = moves.map(function(mov) {
@@ -475,7 +478,7 @@ function mcts_playout(opts, board, color, depth, sgn, moves)
             return uct;
         });
         // select based on UCT
-        i = arg_max(uct.map(UCB1));
+        i = arg_max(uct.map(UCB1), 0 < sgn ? "max" : "min");
     }
     else
     {
@@ -483,18 +486,17 @@ function mcts_playout(opts, board, color, depth, sgn, moves)
         // select randomly
         i = any_of(moves.length);
     }
-    value = 0;
     mov = moves[i];
     move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
     moves_next = board.all_moves_for(OPPOSITE[color], true);
-    value = opts.eval_pos ? 0 : (sgn*opts.eval_move(board, color, move, moves_next.length));
-    value += mcts_playout(opts, board, OPPOSITE[color], depth+1, -sgn, moves_next);
+    score = opts.eval_pos ? 0 : (curr + sgn*opts.eval_move(board, color, move, moves_next.length));
+    value = mcts_playout(opts, board, OPPOSITE[color], depth+1, -sgn, moves_next, score);
     board.unmove(move);
     if (uct)
     {
         // update UCT
         uct[i].ni += 1;
-        w = win(sgn*value, opts.MATE);
+        w = win(value, opts.MATE);
         d = w - uct[i].mi;
         uct[i].mi = uct[i].mi + d/uct[i].ni;
         uct[i].vi = ((uct[i].ni-1)*uct[i].vi + d*(w - uct[i].mi))/uct[i].ni;
@@ -513,25 +515,8 @@ function win(x, MATE)
     //return 1 / (1 + stdMath.exp(-x/20));
 }
 
-
-function evaluate(opts, board, color, depth, sgn, moves)
-{
-    switch (opts.algo)
-    {
-        case "mcts":
-        return mcts(opts, board, color, depth, sgn, moves);
-
-        case "bns":
-        return bns(opts, board, color, depth, sgn, moves);
-
-        case "mtdf":
-        return mtdf(opts, board, color, depth, sgn, moves);
-
-        default:
-        return alphabeta(opts, board, color, depth, sgn, moves, -Infinity, Infinity);
-    }
-}
-var MATE = 1000, DRAW = 500, VALUE = [MATE, 100, 10, 10, 20, 1];
+// custom evaluation functions ------------------
+var MATE = 1000 + 10*100, DRAW = MATE/2, VALUE = [MATE, 100, 10, 10, 20, 1];
 function eval_move(board, color, move, opponent_moves)
 {
     /*
@@ -539,7 +524,7 @@ function eval_move(board, color, move, opponent_moves)
     */
     // O(1)
     var opK = board.king[COLOR[OPPOSITE[color]]],
-        f1 = 1, f2 = 0.12, f3 = 0.12, f4 = 20;
+        f1 = 1, f2 = 0.12, f3 = 0.12, f4 = 20, f5 = 0.1;
     if (0 === opponent_moves) return board.threatened_at_by(opK.y, opK.x, color) ? MATE : DRAW;
     var moved = move[0], placed = board._[move[3]][move[4]], taken = move[5],
         d1 = stdMath.abs(move[2]-opK.x)+stdMath.abs(move[1]-opK.y),
@@ -548,9 +533,24 @@ function eval_move(board, color, move, opponent_moves)
         promotion_gain = VALUE[placed.type-1]-VALUE[moved.type-1],
         capture_gain = !taken || !taken.type ? 0 : VALUE[taken.type-1],
         material_gain = promotion_gain + capture_gain,
-        opponent_mobility = board.halfMoves < f4 ? 0 : (opponent_moves || 0)
+        opponent_mobility = board.halfMoves < f4 ? 0 : (opponent_moves || 0),
+        place_goodness = 0
     ;
-    return f1*material_gain + f2*close_to_opposite_king - f3*opponent_mobility;
+    switch (moved.type)
+    {
+        case 1: // KING, good to avoid corners
+        place_goodness = (0 === move[3] && 0 === move[4]) || (0 === move[3] && 7 === move[4]) || (7 === move[3] && 0 === move[4]) || (7 === move[3] && 7 === move[4]) ? -1 : 0;
+        break;
+
+        case 4: // KNIGHT, good to avoid edges
+        place_goodness = -1 < [0, 7].indexOf(move[4]) || -1 < [0, 7].indexOf(move[3]) ? -1 : 0;
+        break;
+
+        case 6: // PAWN, good to move forward
+        place_goodness = stdMath.abs(move[3]-move[1]);
+        break;
+    }
+    return f1*material_gain + f2*close_to_opposite_king - f3*opponent_mobility + f5*place_goodness;
 }
 eval_move.MATE = MATE;
 function eval_pos(board, color)
@@ -585,11 +585,11 @@ function order_moves(scores, moves, moves_next)
     if (moves_next) moves_next.forEach(function(_, i) {moves_next[i] = si[i][2];});
     return moves;
 }
-function best_n_moves(n, moves, board, player, sgn)
+function best_n_moves(n, moves, board, player)
 {
     return order_moves(moves.map(function(mov) {
         var move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true),
-            score = sgn*eval_move(board, player, move, null);
+            score = eval_move(board, player, move, null);
         board.unmove(move);
         return score;
     }), moves.slice()).slice(0, n);
