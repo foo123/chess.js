@@ -16,10 +16,14 @@
 // In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 4 - 2 (min.moves 32,max.moves 72)
 // In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 3 - 3 (min.moves 38,max.moves 94)
 // In tournament of 6 match(es) between MCTS-25-7-500 and SUNFISH 2023 result is 3 - 3 (min.moves 20,max.moves 78)
+// In tournament of 6 match(es) between MCTS-11-10-200 and SUNFISH 2023 result is 3 - 3 (min.moves 44,max.moves 83)
+// In tournament of 6 match(es) between MCTS-15-14-300 and SUNFISH 2023 result is 4.5 - 1.5 (min.moves 30,max.moves 134)
 
 // In tournament of 6 match(es) between MCTS-25-10-500 and MTDf-245-d result is 3 - 3 (min.moves 62,max.moves 117)
+// In tournament of 6 match(es) between MCTS-15-14-300 and MTDf-245-d result is 4.5 - 1.5 (min.moves 31,max.moves 224)
 
 // In tournament of 6 match(es) between MTDf-245-d and STOCKFISH 18 (ELO1900) result is 0 - 6 (min.moves 21,max.moves 78)
+// In tournament of 6 match(es) between MCTS-15-14-300 and STOCKFISH 18 (ELO1900) result is 0 - 6 (min.moves 13,max.moves 93)
 // In tournament of 6 match(es) between MCTS-25-10-500 and STOCKFISH 18 (ELO1900) result is 0 - 6 (min.moves 40,max.moves 108)
 
 const args = (function parse_args() {
