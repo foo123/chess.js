@@ -94,7 +94,8 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
         start = 0,
         time, time_limit,
         has_timelimit = false,
-        do_next = null, ret = null;
+        do_next = null, ret = null,
+        first_run = true;
 
     log = self.opts.log;
     stopped = self.opts.stopped || return_false;
@@ -171,16 +172,68 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
 
         if ((1 < n) && (opts.depth <= opts.depthM))
         {
-            var i, score_up_to_now, score, test, max = -INF,
+            var i, now, uct, max = -INF,
+                count = n, newcount, test,
                 alpha = -opts.MATE, beta = opts.MATE,
-                mov, move, count = n, newcount, best_move, now, not_done;
+                score_up_to_now, score,
+                mov, move, best_move;
 
-            do {
-                not_done = false;
+            if ("mcts" === opts.algo)
+            {
+                if (first_run)
+                {
+                    if (!opts.uct) opts.uct = {};
+                    opts.depthUCT = stdMath.max(1, opts.depthUCT);
+                    opts.iterations *= n;
+                }
+                uct = moves.map(function(mov) {
+                    var move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true),
+                        key = board.key(), uct = opts.uct[key];
+                    board.unmove(move);
+                    if (!uct) opts.uct[key] = uct = {Ni:0,ni:0,mi:0,vi:0};
+                    return uct;
+                });
+                mcts(opts, board, color, 1, 1, moves, 0);
+                // select based on UCT
+                best_move = arg_max(uct.map(UCT)).map(function(i) {return moves[i];});
+            }
+            else if ("bns" === opts.algo)
+            {
+                do {
+                    best_move = [];
+                    test = alpha + (beta - alpha) * (count - 1) / count;
+                    newcount = 0;
+
+                    for (i=0; i<n; ++i)
+                    {
+                        mov = moves[i];
+                        move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
+                        if (!moves_next[i]) moves_next[i] = board.all_moves_for(opponent, true);
+                        score_up_to_now = opts.eval_pos ? 0 : opts.eval_move(board, color, move, moves_next[i].length);
+                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now, test-1, test);
+                        if (score >= test)
+                        {
+                            ++newcount;
+                            best_move.push(mov);
+                        }
+                        board.unmove(move);
+                    }
+
+                    // update alpha-beta range and count
+                    if (newcount > 1)
+                    {
+                        alpha = test > alpha ? test : (test+1);
+                        count = newcount;
+                    }
+                    else
+                    {
+                        beta = test < beta ? test : (test-1);
+                    }
+                } while (!((alpha+2 > beta) || (1 === newcount)));
+            }
+            else // mtdf, ab
+            {
                 best_move = [];
-                test = alpha + (beta - alpha) * (count - 1) / count;
-                newcount = 0;
-
                 for (i=0; i<n; ++i)
                 {
                     if (has_timelimit && opts.iterativedeepening && (perf.now() - start > time))
@@ -197,21 +250,6 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
 
                     switch (opts.algo)
                     {
-                        case "mcts":
-                        score = mcts(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now);
-                        if (score > max) {max = score; best_move = [mov];}
-                        else if (score === max) {best_move.push(mov);}
-                        break;
-
-                        case "bns":
-                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now, test-1, test);
-                        if (score >= test)
-                        {
-                            ++newcount;
-                            best_move.push(mov);
-                        }
-                        break;
-
                         case "mtdf":
                         opts.f = scores[i];
                         score = mtdf(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now);
@@ -229,24 +267,11 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
                     scores[i] = score;
                     board.unmove(move);
                 }
-
-                if ("bns" === opts.algo)
-                {
-                    // update alpha-beta range
-                    if (newcount > 1)
-                    {
-                        alpha = test > alpha ? test : (test+1);
-                        count = newcount;
-                    }
-                    else
-                    {
-                        beta = test < beta ? test : (test-1);
-                    }
-                    not_done = !((alpha+2 > beta) || (1 === newcount));
-                }
-            } while (not_done);
+            }
 
             if (best_move.length) best_moves = best_move;
+
+            first_run = false;
 
             if (has_timelimit)
             {
@@ -435,8 +460,7 @@ function bns(opts, board, color, depth, sgn, moves, score_up_to_now, alpha, beta
                     value = stdMath.max(value, score);
                 }
             }
-            // update alpha-beta range
-            // update number of sub-trees that exceeds separation test value
+            // update alpha-beta range and count
             if (newcount > 1)
             {
                 alpha = test > alpha ? test : (test+1);
@@ -496,7 +520,7 @@ function mcts_playout(opts, board, color, depth, sgn, moves, score_up_to_now)
             return uct;
         });
         // select based on UCT
-        i = arg_max(uct.map(UCB1), 0 < sgn ? "max" : "min");
+        i = random_choice(arg_max(uct.map(UCB1), 0 < sgn ? "max" : "min"));
     }
     else
     {
@@ -622,6 +646,10 @@ function UCB1(si)
     // https://en.wikipedia.org/wiki/Upper_Confidence_Bound#UCB1-Tuned
     ++si.Ni;
     return si.ni ? (si.mi + stdMath.sqrt(stdMath.min(0.25, si.vi)*stdMath.log(si.Ni-1)/si.ni)) : INF;
+}
+function UCT(si)
+{
+    return si.ni ? (si.mi + stdMath.sqrt(stdMath.min(0.25, si.vi)*stdMath.log(si.Ni)/si.ni)) : -INF;
 }
 function win(x, MATE)
 {
@@ -749,7 +777,7 @@ function arg_max(values, type)
             }
         }
     }
-    return random_choice(iv);
+    return iv;
 }
 function any_of(N)
 {
