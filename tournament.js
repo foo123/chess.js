@@ -1,22 +1,14 @@
 "use strict";
 
-// use: node tournament.js [stockfish|sunfish|ab|mtdf|bns|mcts|mctsab|abmcts|abbns] [stockfish|sunfish|ab|mtdf|bns|mcts|mctsab|abmcts|abbns] nmatches --show --deepen --depth=DEPTH --bns=BNS --ab=AB --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO
+// use: node tournament.js engine1 engine2 nmatches --show --deepen --depth=DEPTH --bns=BNS --ab=AB --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO
 
-// In tournament of 10 match(es) between STOCKFISH 16.1 (ELO1900) and SUNFISH 2023 result is 8 - 2 (min.moves 46,max.moves 128)
-// In tournament of 10 match(es) between STOCKFISH 18 (ELO1900) and SUNFISH 2023 result is 7 - 3 (min.moves 36,max.moves 86)
+// In tournament of 6 match(es) between STOCKFISH 18 (ELO1900) and SUNFISH 2023 result is 5.5 - 0.5 (min.moves 48,max.moves 68,draws 1)
 
-// In tournament of 6 match(es) between STOCKFISH 18 (ELO1900) and SUNFISH 2023 result is 6 - 0 (min.moves 33,max.moves 223)
-
-// In tournament of 6 match(es) between AB-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 34,max.moves 128)
-// In tournament of 6 match(es) between AB-245-d and SUNFISH 2023 result is 1 - 5 (min.moves 32,max.moves 102)
-// In tournament of 6 match(es) between MTDf-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 32,max.moves 93)
-// In tournament of 6 match(es) between BNS-6 and SUNFISH 2023 result is 1 - 5 (min.moves 26,max.moves 124)
-// In tournament of 6 match(es) between BNS-7 and SUNFISH 2023 result is 1 - 5 (min.moves 8,max.moves 161)
-// In tournament of 6 match(es) between MCTS-15-10-500 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 24,max.moves 64)
-// In tournament of 6 match(es) between MCTS-15-10-500 and SUNFISH 2023 result is 3 - 3 (min.moves 20,max.moves 110)
-// In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 14,max.moves 146)
-// In tournament of 6 match(es) between MCTS-25-10-500 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 32,max.moves 82)
-// In tournament of 6 match(es) between MCTS-35-10-700 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 54,max.moves 122)
+// In tournament of 6 match(es) between AB-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 24,max.moves 132,draws 4)
+// In tournament of 6 match(es) between MTDf-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 50,max.moves 125,draws 2)
+// In tournament of 6 match(es) between BNS-7 and SUNFISH 2023 result is 2.5 - 3.5 (min.moves 44,max.moves 142,draws 3)
+// In tournament of 6 match(es) between MCTS-25-4-500 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 28,max.moves 76,draws 1)
+// In tournament of 6 match(es) between MCTS-25-6-500 and SUNFISH 2023 result is 2 - 4 (min.moves 36,max.moves 113,draws 2)
 
 const args = (function parse_args() {
     const args = {
@@ -42,6 +34,9 @@ const args = (function parse_args() {
         'abmcts',
         'mctsab',
         'abbns',
+        'mixed1',
+        'mixed2',
+        'mixed3',
         'sunfish',
         'stockfish'
     ];
@@ -94,20 +89,6 @@ const opts = {
 };
 
 const init = {
-    ab: function() {
-    },
-    mtdf: function() {
-    },
-    bns: function() {
-    },
-    mcts: function() {
-    },
-    mctsab: function() {
-    },
-    abmcts: function() {
-    },
-    abbns: function() {
-    },
     sunfish: function() {
         engine.sunfish.sendCMD('ucinewgame');
         engine.sunfish.sendCMD('isready');
@@ -139,6 +120,24 @@ const play = {
     abbns: function(game, then) {
         then((new ChessSearch.HybridSearch(game, opts.abbns)).bestMove(game.getBoard().turn));
     },
+    mixed1: function(game, then) {
+        const mtdf = {algo:"mtdf", iterativedeepening:true, depth:245, time:10000, log:args.SHOW};
+        const mcts = {algo:"mcts", iterations:500, uct:4, depth:25, time:10000, log:args.SHOW};
+        const board = game.getBoard();
+        then((new ChessSearch.HybridSearch(game, game.isCheck() ? mtdf : mcts)).bestMove(board.turn));
+    },
+    mixed2: function(game, then) {
+        const mtdf = {algo:"mtdf", iterativedeepening:true, depth:245, time:10000, log:args.SHOW};
+        const mcts = {algo:"mcts", iterations:500, uct:4, depth:25, time:10000, log:args.SHOW};
+        const board = game.getBoard();
+        then((new ChessSearch.HybridSearch(game, game.isCheck() ? mcts : mtdf)).bestMove(board.turn));
+    },
+    mixed3: function(game, then) {
+        const bns = {algo:"bns", depth:7, time:10000, log:args.SHOW};
+        const mcts = {algo:"mcts", iterations:500, uct:4, depth:25, time:10000, log:args.SHOW};
+        const board = game.getBoard();
+        then((new ChessSearch.HybridSearch(game, game.isCheck() ? mcts : bns)).bestMove(board.turn));
+    },
     sunfish: function(game, then) {
         engine.sunfish.sendCMD('position startpos moves ' + game.getMovesUpToNow().join(' '));
         engine.sunfish.sendCMD('go ' + (opts.sunfish.depth ? ('depth ' + String(opts.sunfish.depth)) : '') + (opts.sunfish.time ? ('wtime ' + String(opts.sunfish.time) + ' btime ' + String(opts.sunfish.time)) : ''), then);
@@ -157,11 +156,14 @@ const player = {
     mctsab:     'MCTSAB-'+String(opts.mctsab.depth)+'-'+String(opts.mctsab.uct)+'-'+String(opts.mctsab.mcts)+'-'+String(opts.mctsab.ab)+'-'+String(opts.mctsab.iterations),
     abmcts:     'ABMCTS-'+String(opts.abmcts.depth)+'-'+String(opts.abmcts.uct)+'-'+String(opts.abmcts.mcts)+'-'+String(opts.abmcts.iterations),
     abbns:      'ABBNS-'+String(opts.abbns.depth)+'-'+String(opts.abbns.bns),
+    mixed1:     'MIXED(MTDf,MCTS)',
+    mixed2:     'MIXED(MCTS,MTDf)',
+    mixed3:     'MIXED(MCTS,BNS)',
     sunfish:    'SUNFISH 2023',
     stockfish:  'STOCKFISH 18 (ELO'+String(opts.stockfish.elo)+')'
 };
 
-function tournament(match, matches_won_by_p1, min_plies, max_plies, done)
+function tournament(match, matches_won_by_p1, min_plies, max_plies, draws, done)
 {
     function play_match(WHITE, BLACK, GAME_OVER)
     {
@@ -236,20 +238,21 @@ function tournament(match, matches_won_by_p1, min_plies, max_plies, done)
         }
         match = 0;
         matches_won_by_p1 = 0;
+        draws = 0;
         min_plies = 1e6;
         max_plies = 0;
     }
     if (match < args.NUM_MATCHES)
     {
         ++match;
-        init[args.PLAYER1]();
-        init[args.PLAYER2]();
+        if (init[args.PLAYER1]) init[args.PLAYER1]();
+        if (init[args.PLAYER2]) init[args.PLAYER2]();
         if (match & 1)
         {
             console.log('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER1]+' vs '+player[args.PLAYER2]+' ..');
             play_match(play[args.PLAYER1], play[args.PLAYER2], function(score_for_white, plies) {
                 console.log('Result after '+String(plies)+' moves: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
-                tournament(match, matches_won_by_p1 + score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), done);
+                tournament(match, matches_won_by_p1 + score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), draws+(0.5 === score_for_white ? 1 : 0), done);
             });
         }
         else
@@ -257,14 +260,14 @@ function tournament(match, matches_won_by_p1, min_plies, max_plies, done)
             console.log('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER2]+' vs '+player[args.PLAYER1]+' ..');
             play_match(play[args.PLAYER2], play[args.PLAYER1], function(score_for_white, plies) {
                 console.log('Result after '+String(plies)+' moves: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
-                tournament(match, matches_won_by_p1 + 1-score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), done);
+                tournament(match, matches_won_by_p1 + 1-score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), draws+(0.5 === score_for_white ? 1 : 0), done);
             });
         }
     }
     else if (args.NUM_MATCHES)
     {
-        console.log('In tournament of '+String(args.NUM_MATCHES)+' match(es) between '+player[args.PLAYER1]+' and '+player[args.PLAYER2]+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' (min.moves '+String(min_plies)+',max.moves '+String(max_plies)+')');
-        if (done) done(matches_won_by_p1, args.NUM_MATCHES-matches_won_by_p1, min_plies, max_plies);
+        console.log('In tournament of '+String(args.NUM_MATCHES)+' match(es) between '+player[args.PLAYER1]+' and '+player[args.PLAYER2]+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' (min.moves '+String(min_plies)+',max.moves '+String(max_plies)+',draws '+String(draws)+')');
+        if (done) done(matches_won_by_p1, args.NUM_MATCHES-matches_won_by_p1, min_plies, max_plies, draws);
     }
 }
 
