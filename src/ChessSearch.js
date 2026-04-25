@@ -115,7 +115,7 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
     opts.depthUCT = (+self.opts.uct) || 0;
     opts.iterations = null != self.opts.iterations ? +self.opts.iterations : 100;
 
-    opts.uct = 0 < opts.depthUCT ? {} : null; // uct stats storage, if needed
+    opts.uct = {}; // uct stats storage, if needed
     opts.tt = {}; // transposition table, where needed, as needed
 
     opts.f = 0;
@@ -182,7 +182,6 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
             {
                 if (first_run)
                 {
-                    if (!opts.uct) opts.uct = {};
                     opts.depthUCT = stdMath.max(1, opts.depthUCT);
                     opts.iterations *= n;
                 }
@@ -649,7 +648,7 @@ function UCB1(si)
 }
 function UCT(si)
 {
-    return si.ni ? (si.mi + stdMath.sqrt(stdMath.min(0.25, si.vi)*stdMath.log(si.Ni)/si.ni)) : -INF;
+    return si.ni ? si.mi : -INF;
 }
 function win(x, MATE)
 {

@@ -1,6 +1,6 @@
 # Chess
 
-Chess Game, Chess Board, Chess Engine and GUI
+Chess Game, Chess Board, Chess Engine and Chess Exercises
 
 ![chess game](/screenshot.png)
 
