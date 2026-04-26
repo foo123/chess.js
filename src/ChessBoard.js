@@ -18,13 +18,14 @@ else
 }('undefined' !== typeof self ? self : this, 'ChessBoard', function(undef) {
 "use strict";
 
-function ChessBoard(container, squares, container_moves, moves)
+function ChessBoard(container, container_moves)
 {
-    var self = this;
-    self.make = function(get_piece_at)  {
+    var self = this, squares = null;
+    self.make = function(get_piece_at, moves)  {
         var nt, nb, nl, nr, span, i, j, square, piece;
         container.textContent = '';
         addClass(container, 'chessboard');
+        squares = $$('div');
         addClass(squares, 'chessboard-squares');
         container.appendChild(squares);
         if (container_moves && moves)
@@ -83,18 +84,16 @@ function ChessBoard(container, squares, container_moves, moves)
                 square.style.setProperty('--y', String(8-i));
                 addClass(square, 'square');
                 addClass(square, i & 1 ? (j & 1 ? 'white' : 'black') : (j & 1 ? 'black' : 'white'));
-                if (get_piece_at)
-                {
-                    piece = get_piece_at(square.id);
-                    if (piece)
-                    {
-                        addClass(square, ('BLACK' === piece.color ? 'b-' : 'w-')+piece.type.toLowerCase());
-                        addClass(square, 'piece');
-                    }
-                }
+                if (get_piece_at) self.add(square, get_piece_at(square.id));
                 squares.appendChild(square);
             }
         }
+    };
+    self.container = function() {
+        return container;
+    };
+    self.squares = function() {
+        return squares;
     };
     self.empty = function(square) {
         if (square)
@@ -115,10 +114,14 @@ function ChessBoard(container, squares, container_moves, moves)
         }
     };
     self.add = function(square, piece) {
-        if (square && piece)
+        if (square)
         {
-            addClass(square, ('BLACK' === piece.color ? 'b-' : 'w-')+piece.type.toLowerCase());
-            addClass(square, 'piece');
+            piece = get_piece(piece);
+            if (piece)
+            {
+                addClass(square, ('BLACK' === piece.color ? 'b-' : 'w-') + piece.type.toLowerCase());
+                addClass(square, 'piece');
+            }
         }
     };
     self.move = function(piece, square1, square2) {
@@ -138,6 +141,50 @@ function ChessBoard(container, squares, container_moves, moves)
 }
 
 // utils
+function get_piece(piece)
+{
+    if (piece)
+    {
+        if ("string" === typeof piece)
+        {
+            switch (piece.toUpperCase())
+            {
+                case 'P':
+                piece = {color:'p' === piece ? 'BLACK' : 'WHITE', type:'PAWN'};
+                break;
+
+                case 'R':
+                piece = {color:'r' === piece ? 'BLACK' : 'WHITE', type:'ROOK'};
+                break;
+
+                case 'N':
+                piece = {color:'n' === piece ? 'BLACK' : 'WHITE', type:'KNIGHT'};
+                break;
+
+                case 'B':
+                piece = {color:'b' === piece ? 'BLACK' : 'WHITE', type:'BISHOP'};
+                break;
+
+                case 'Q':
+                piece = {color:'q' === piece ? 'BLACK' : 'WHITE', type:'QUEEN'};
+                break;
+
+                case 'K':
+                piece = {color:'k' === piece ? 'BLACK' : 'WHITE', type:'KING'};
+                break;
+
+                default:
+                piece = null;
+                break;
+            }
+        }
+        else if (!piece.type || (-1 === (['KING','QUEEN','BISHOP','KNIGHT','ROOK','PAWN']).indexOf(String(piece.type).toUpperCase())))
+        {
+            piece = null;
+        }
+    }
+    return piece || null;
+}
 function el(id)
 {
     return document.getElementById(id);
@@ -149,38 +196,6 @@ function $(sel, el)
 function $$(tag)
 {
     return document.createElement(tag);
-}
-function hasEventOptions()
-{
-    if (null == hasEventOptions.supported)
-    {
-        var passiveSupported = false, options = {};
-        try {
-            Object.defineProperty(options, 'passive', {
-                get: function(){
-                    passiveSupported = true;
-                    return false;
-                }
-            });
-            window.addEventListener('test', null, options);
-            window.removeEventListener('test', null, options);
-        } catch(e) {
-            passiveSupported = false;
-        }
-        hasEventOptions.supported = passiveSupported;
-    }
-    return hasEventOptions.supported;
-}
-function addEvent(target, event, handler, options)
-{
-    if (target.attachEvent) target.attachEvent('on' + event, handler);
-    else target.addEventListener(event, handler, hasEventOptions() ? options : ('object' === typeof(options) ? !!options.capture : !!options));
-}
-function removeEvent(target, event, handler, options)
-{
-    // if (el.removeEventListener) not working in IE11
-    if (target.detachEvent) target.detachEvent('on' + event, handler);
-    else target.removeEventListener(event, handler, hasEventOptions() ? options : ('object' === typeof(options) ? !!options.capture : !!options));
 }
 function hasClass(el, className)
 {

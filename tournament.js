@@ -2,13 +2,17 @@
 
 // use: node tournament.js engine1 engine2 nmatches --show --deepen --depth=DEPTH --bns=BNS --ab=AB --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO
 
-// In tournament of 6 match(es) between STOCKFISH 18 (ELO1900) and SUNFISH 2023 result is 5.5 - 0.5 (min.moves 48,max.moves 68,draws 1)
+// In 6 matches of STOCKFISH 18 (ELO1900) vs SUNFISH 2023 result is 5.5 - 0.5 (1 draw,min.plies 48,max.plies 68)
 
-// In tournament of 6 match(es) between AB-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 24,max.moves 132,draws 4)
-// In tournament of 6 match(es) between MTDf-245-d and SUNFISH 2023 result is 2 - 4 (min.moves 50,max.moves 125,draws 2)
-// In tournament of 6 match(es) between BNS-7 and SUNFISH 2023 result is 2.5 - 3.5 (min.moves 44,max.moves 142,draws 3)
-// In tournament of 6 match(es) between MCTS-25-4-500 and SUNFISH 2023 result is 3.5 - 2.5 (min.moves 28,max.moves 76,draws 1)
-// In tournament of 6 match(es) between MCTS-25-6-500 and SUNFISH 2023 result is 2 - 4 (min.moves 36,max.moves 113,draws 2)
+// In 6 matches of AB-245-d vs SUNFISH 2023 result is 2 - 4 (4 draws,min.plies 24,max.plies 132)
+// In 6 matches of MTDf-245-d vs SUNFISH 2023 result is 2 - 4 (2 draws,min.plies 50,max.plies 125)
+// In 6 matches of BNS-7 vs SUNFISH 2023 result is 2.5 - 3.5 (3 draws,min.plies 44,max.plies 142)
+// In 6 matches of MCTS-15-4-500 vs SUNFISH 2023 result is 2 - 4 (2 draws,min.plies 20,max.plies 132)
+// In 6 matches of MCTS-20-4-500 vs SUNFISH 2023 result is 2 - 4 (2 draws,min.plies 10,max.plies 118)
+// In 6 matches of MCTS-25-4-500 vs SUNFISH 2023 result is 3.5 - 2.5 (1 draw,min.plies 28,max.plies 76)
+// In 6 matches of MCTS-35-4-500 vs SUNFISH 2023 result is 1.5 - 4.5 (3 draws,min.plies 30,max.plies 124)
+// In 6 matches of MCTS-15-6-500 vs SUNFISH 2023 result is 3 - 3 (2 draws,min.plies 34,max.plies 130)
+// In 6 matches of MCTS-25-6-500 vs SUNFISH 2023 result is 2 - 4 (2 draws,min.plies 36,max.plies 113)
 
 const args = (function parse_args() {
     const args = {
@@ -163,7 +167,7 @@ const player = {
     stockfish:  'STOCKFISH 18 (ELO'+String(opts.stockfish.elo)+')'
 };
 
-function tournament(match, matches_won_by_p1, min_plies, max_plies, draws, done)
+function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
 {
     function play_match(WHITE, BLACK, GAME_OVER)
     {
@@ -251,23 +255,23 @@ function tournament(match, matches_won_by_p1, min_plies, max_plies, draws, done)
         {
             console.log('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER1]+' vs '+player[args.PLAYER2]+' ..');
             play_match(play[args.PLAYER1], play[args.PLAYER2], function(score_for_white, plies) {
-                console.log('Result after '+String(plies)+' moves: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
-                tournament(match, matches_won_by_p1 + score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), draws+(0.5 === score_for_white ? 1 : 0), done);
+                console.log('Result after '+String(plies)+' plies: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
+                tournament(match, matches_won_by_p1 + score_for_white, draws+(0.5 === score_for_white ? 1 : 0), Math.min(plies, min_plies), Math.max(plies, max_plies), done);
             });
         }
         else
         {
             console.log('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER2]+' vs '+player[args.PLAYER1]+' ..');
             play_match(play[args.PLAYER2], play[args.PLAYER1], function(score_for_white, plies) {
-                console.log('Result after '+String(plies)+' moves: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
-                tournament(match, matches_won_by_p1 + 1-score_for_white, Math.min(plies, min_plies), Math.max(plies, max_plies), draws+(0.5 === score_for_white ? 1 : 0), done);
+                console.log('Result after '+String(plies)+' plies: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
+                tournament(match, matches_won_by_p1 + 1-score_for_white, draws+(0.5 === score_for_white ? 1 : 0), Math.min(plies, min_plies), Math.max(plies, max_plies), done);
             });
         }
     }
     else if (args.NUM_MATCHES)
     {
-        console.log('In tournament of '+String(args.NUM_MATCHES)+' match(es) between '+player[args.PLAYER1]+' and '+player[args.PLAYER2]+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' (min.moves '+String(min_plies)+',max.moves '+String(max_plies)+',draws '+String(draws)+')');
-        if (done) done(matches_won_by_p1, args.NUM_MATCHES-matches_won_by_p1, min_plies, max_plies, draws);
+        console.log('In '+String(args.NUM_MATCHES)+' '+(1 === args.NUM_MATCHES ? 'match' : 'matches')+' of '+player[args.PLAYER1]+' vs '+player[args.PLAYER2]+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' ('+String(draws)+' '+(1 === draws ? 'draw' : 'draws')+',min.plies '+String(min_plies)+',max.plies '+String(max_plies)+')');
+        if (done) done(matches_won_by_p1, args.NUM_MATCHES-matches_won_by_p1, draws, min_plies, max_plies);
     }
 }
 
