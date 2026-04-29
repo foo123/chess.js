@@ -197,7 +197,7 @@ function ChessBoard(container, get_piece_at)
         }
     };
     self.showPossibleMoves = function(moves) {
-        moves.forEach(function(m) {addClass(el(m), 'active');});
+        moves.forEach(function(m) {addClass(el(m.length > 2 ? m.slice(0, 2) : m), 'active');});
     };
     self.clearPossibleMoves = function() {
         $('.square.active', container).forEach(function(s) {removeClass(s, 'active');});
