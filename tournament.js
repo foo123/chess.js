@@ -1,6 +1,6 @@
 "use strict";
 
-// use: node tournament.js engine1 engine2 nmatches --show --deepen --depth=DEPTH --bns=BNS --ab=AB --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO
+// use: node tournament.js engine1 engine2 nmatches --show --deepen --depth=DEPTH --bns=BNS --ab=AB --mcts=MCTS --uct=UCT --iter=ITER --elo=ELO --name1=PLAYER1 --name2=PLAYER2
 
 // In 6 matches of STOCKFISH 18 (ELO1900) vs SUNFISH 2023 result is 5.5 - 0.5 (1 draw,min.plies 48,max.plies 68)
 
@@ -20,10 +20,10 @@
 // In 6 matches of MIXED(MCTS-15,MTDf) vs SUNFISH 2023 result is 2 - 4 (4 draws,min.plies 58,max.plies 126)
 // In 6 matches of MIXED(MTDf,MCTS-15) vs SUNFISH 2023 result is 1.5 - 4.5 (1 draw,min.plies 14,max.plies 155)
 
-const echo = console.log;
 const args = (function parse_args() {
+    const echo = console.log;
     const args = {
-        PLAYER1:        'ab',
+        PLAYER1:        'human',
         PLAYER2:        'sunfish',
         NUM_MATCHES:    1,
         SHOW:           false,
@@ -38,7 +38,6 @@ const args = (function parse_args() {
     };
 
     const supported_players = [
-        'human',
         'ab',
         'mtdf',
         'bns',
@@ -51,15 +50,16 @@ const args = (function parse_args() {
         'mixed3',
         'mixed4',
         'sunfish',
-        'stockfish'
+        'stockfish',
+        'human'
     ];
 
-    args.PLAYER1 = (process.argv[2] || 'ab').trim().toLowerCase();
-    args.PLAYER2 = (process.argv[3] || 'sunfish').trim().toLowerCase();
+    args.PLAYER1 = {player:(process.argv[2] || 'human').trim().toLowerCase(), name: null};
+    args.PLAYER2 = {player:(process.argv[3] || 'sunfish').trim().toLowerCase(), name: null};
 
-    if (-1 === supported_players.indexOf(args.PLAYER1) || -1 === supported_players.indexOf(args.PLAYER2))
+    if (-1 === supported_players.indexOf(args.PLAYER1.player) || -1 === supported_players.indexOf(args.PLAYER2.player))
     {
-        echo('Unsupported players: '+[args.PLAYER1,args.PLAYER2].join(' vs '));
+        echo('Unsupported players: '+[args.PLAYER1.player, args.PLAYER2.player].join(' vs '));
         echo('Supported players: '+supported_players.join(', '));
         process.exit(1);
     }
@@ -77,9 +77,13 @@ const args = (function parse_args() {
         if ('--uct=' === process.argv[i].slice(0, 6).toLowerCase()) args.UCT = parseInt(process.argv[i].slice(6).trim()) || 0;
         if ('--iter=' === process.argv[i].slice(0, 7).toLowerCase()) args.ITER = parseInt(process.argv[i].slice(7).trim()) || 100;
         if ('--elo=' === process.argv[i].slice(0, 6).toLowerCase()) args.ELO = parseInt(process.argv[i].slice(6).trim()) || 1500;
+        if ('--name1=' === process.argv[i].slice(0, 8).toLowerCase()) args.PLAYER1.name = process.argv[i].slice(8).trim();
+        if ('--name2=' === process.argv[i].slice(0, 8).toLowerCase()) args.PLAYER2.name = process.argv[i].slice(8).trim();
         ++i;
     }
 
+    if (!args.PLAYER1.name) args.PLAYER1.name = args.PLAYER1.player;
+    if (!args.PLAYER2.name) args.PLAYER2.name = args.PLAYER2.player;
     return args;
 })();
 
@@ -102,7 +106,6 @@ const algorithm = {
     sunfish:   {depth:245, time:10000},
     stockfish: {elo:args.ELO, depth:245, time:10000}
 };
-
 const init = {
     sunfish: function() {
         engine.sunfish.sendCMD('ucinewgame');
@@ -169,15 +172,47 @@ const play = {
         engine.stockfish.sendCMD('go ' + (algorithm.stockfish.depth ? ('depth ' + String(algorithm.stockfish.depth)) : '') + (algorithm.stockfish.time ? ('wtime ' + String(algorithm.stockfish.time) + ' btime ' + String(algorithm.stockfish.time)) : ''));
     },
     human: function(game, then) {
-        if (repl)
+        if (!repl)
         {
-            //repl.setPrompt(game.whoseTurn().slice(0,1) + ': ');
-            repl.context.then = then;
+            // init repl
+            repl = require('repl').start({
+                prompt: /*game.whoseTurn().slice(0, 1)*/args.PLAYER1.name + ': ',
+                writer: function(out) {
+                    return null != out ? String(out) : '';
+                },
+                eval: function(move, ctx, r, ret) {
+                    ctx.output = function(msg) {ret(null, msg);};
+                    move = String(move).trim().toLowerCase();
+                    if ("undo" === move)
+                    {
+                        ctx.then("undo");
+                    }
+                    else
+                    {
+                        const match = move.match(/([a-h][1-8])\s*([a-h][1-8])\s*([qrbn])?/);
+                        if (match)
+                        {
+                            const piece = ctx.game.getPieceAt(match[1]);
+                            if (!piece || (piece.color !== ctx.game.whoseTurn()) || !ctx.game.getPossibleMovesAt(match[1]).filter((m) => m.slice(0, 2) === match[2]).length)
+                            {
+                                ret(null, 'invalid move');
+                            }
+                            else
+                            {
+                                ctx.then({from:match[1], to:match[2], promotion:match[3]});
+                            }
+                        }
+                        else
+                        {
+                            ret(null, 'invalid move');
+                        }
+                    }
+                }
+            });
+            repl.context.msg = '';
         }
-        else
-        {
-            then(null);
-        }
+        repl.context.game = game;
+        repl.context.then = then;
     }
 };
 const player = {
@@ -194,7 +229,7 @@ const player = {
     mixed4:     'MIXED(BNS,MCTS)',
     sunfish:    'SUNFISH 2023',
     stockfish:  'STOCKFISH 18 (ELO'+String(algorithm.stockfish.elo)+')',
-    human: 'human'
+    human:      'human'
 };
 
 function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
@@ -216,7 +251,7 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
                     ++plies;
                     if (args.SHOW)
                     {
-                        output = String(plies)+'. ' + game.whoseTurn().slice(0,1) + ':' + move.from + move.to + (move.promotion || '');
+                        output = String(plies)+'. ' + game.whoseTurn().slice(0, 1) + ':' + move.from + move.to + (move.promotion || '');
                     }
                     game.doMove(move.from, move.to, move.promotion);
                     if (args.SHOW)
@@ -230,29 +265,44 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
             {
                 if (args.SHOW)
                 {
-                    output = String(plies+1) + '. ' + game.whoseTurn().slice(0,1) + ':nomove';
+                    output = String(plies+1) + '. ' + game.whoseTurn().slice(0, 1) + ':nomove';
                     echo(output);
                 }
                 game.noMove();
             }
             if (game.isGameOver())
             {
+                repl_prompt('');
+                repl_echo();
                 const winner = game.winner();
                 const score = 'DRAW' === winner ? 0.5 : ('WHITE' === winner ? 1 : 0);
                 board.dispose();
                 game.dispose();
                 return GAME_OVER(score, plies);
             }
-            switch (game.whoseTurn())
+            else
             {
-                case 'WHITE':
-                if ('human' === WHITE.player) echo(board.toString("WHITE", "terminal"));
-                WHITE(game, play_next);
-                break;
-                case 'BLACK':
-                if ('human' === BLACK.player) echo(board.toString("BLACK", "terminal"));
-                BLACK(game, play_next);
-                break;
+                switch (game.whoseTurn())
+                {
+                    case 'WHITE':
+                    if ('human' === WHITE.player)
+                    {
+                        echo(board.toString("WHITE", "terminal"));
+                        repl_prompt(WHITE.name+': ');
+                        repl_echo();
+                    }
+                    play[WHITE.player](game, play_next);
+                    break;
+                    case 'BLACK':
+                    if ('human' === BLACK.player)
+                    {
+                        echo(board.toString("BLACK", "terminal"));
+                        repl_prompt(BLACK.name+': ');
+                        repl_echo();
+                    }
+                    play[BLACK.player](game, play_next);
+                    break;
+                }
             }
         }
         const game = new ChessGame();
@@ -261,12 +311,22 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
         switch (game.whoseTurn())
         {
             case 'WHITE':
-            if ('human' === WHITE.player) echo(board.toString("WHITE", "terminal"));
-            WHITE(game, play_next);
+            if ('human' === WHITE.player)
+            {
+                echo(board.toString("WHITE", "terminal"));
+                repl_prompt(WHITE.name+': ');
+                repl_echo();
+            }
+            play[WHITE.player](game, play_next);
             break;
             case 'BLACK':
-            if ('human' === BLACK.player) echo(board.toString("BLACK", "terminal"));
-            BLACK(game, play_next);
+            if ('human' === BLACK.player)
+            {
+                echo(board.toString("BLACK", "terminal"));
+                repl_prompt(BLACK.name+': ');
+                repl_echo();
+            }
+            play[BLACK.player](game, play_next);
             break;
         }
     }
@@ -289,26 +349,24 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
         draws = 0;
         min_plies = 1e6;
         max_plies = 0;
-        play[args.PLAYER1].player = player[args.PLAYER1];
-        play[args.PLAYER2].player = player[args.PLAYER2];
     }
     if (match < args.NUM_MATCHES)
     {
         ++match;
-        if (init[args.PLAYER1]) init[args.PLAYER1]();
-        if (init[args.PLAYER2]) init[args.PLAYER2]();
+        if (init[args.PLAYER1.player]) init[args.PLAYER1.player]();
+        if (init[args.PLAYER2.player]) init[args.PLAYER2.player]();
         if (match & 1)
         {
-            echo('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER1]+' vs '+player[args.PLAYER2]+' ..');
-            play_match(play[args.PLAYER1], play[args.PLAYER2], function(score_for_white, plies) {
+            echo('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+args.PLAYER1.name+' vs '+args.PLAYER2.name+' ..');
+            play_match(args.PLAYER1, args.PLAYER2, function(score_for_white, plies) {
                 echo('Result after '+String(plies)+' plies: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
                 tournament(match, matches_won_by_p1 + score_for_white, draws+(0.5 === score_for_white ? 1 : 0), Math.min(plies, min_plies), Math.max(plies, max_plies), done);
             });
         }
         else
         {
-            echo('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+player[args.PLAYER2]+' vs '+player[args.PLAYER1]+' ..');
-            play_match(play[args.PLAYER2], play[args.PLAYER1], function(score_for_white, plies) {
+            echo('Playing match '+String(match)+' of '+String(args.NUM_MATCHES)+': '+args.PLAYER2.name+' vs '+args.PLAYER1.name+' ..');
+            play_match(args.PLAYER2, args.PLAYER1, function(score_for_white, plies) {
                 echo('Result after '+String(plies)+' plies: '+(0.5 === score_for_white ? '½' : String(score_for_white))+' - '+(0.5 === score_for_white ? '½' : String(1-score_for_white)));
                 tournament(match, matches_won_by_p1 + 1-score_for_white, draws+(0.5 === score_for_white ? 1 : 0), Math.min(plies, min_plies), Math.max(plies, max_plies), done);
             });
@@ -316,11 +374,36 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
     }
     else if (args.NUM_MATCHES)
     {
-        echo('In '+String(args.NUM_MATCHES)+' '+(1 === args.NUM_MATCHES ? 'match' : 'matches')+' of '+player[args.PLAYER1]+' vs '+player[args.PLAYER2]+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' ('+String(draws)+' '+(1 === draws ? 'draw' : 'draws')+',min.plies '+String(min_plies)+',max.plies '+String(max_plies)+')');
+        echo('In '+String(args.NUM_MATCHES)+' '+(1 === args.NUM_MATCHES ? 'match' : 'matches')+' of '+args.PLAYER1.name+' vs '+args.PLAYER2.name+' result is '+String(matches_won_by_p1)+' - '+String(args.NUM_MATCHES-matches_won_by_p1)+' ('+String(draws)+' '+(1 === draws ? 'draw' : 'draws')+',min.plies '+String(min_plies)+',max.plies '+String(max_plies)+')');
+        repl_prompt('');
+        repl_echo();
         if (done) done(matches_won_by_p1, args.NUM_MATCHES-matches_won_by_p1, draws, min_plies, max_plies);
     }
 }
 
+function repl_prompt(prompt)
+{
+    if (repl) repl.setPrompt(prompt);
+}
+function repl_echo()
+{
+    if (repl)
+    {
+        repl.context.output(repl.context.msg);
+        repl.context.msg = '';
+    }
+}
+function echo(msg)
+{
+    if (repl)
+    {
+        repl.context.msg += msg + "\n";
+    }
+    else
+    {
+        console.log(msg);
+    }
+}
 function ready(f)
 {
     if (!f.waitFor) f();
@@ -329,39 +412,11 @@ function ready(f)
 
 function go()
 {
-    tournament();
+    tournament(null, null, null, null, null, () => process.exit(0));
 }
 go.waitFor = 0;
 
-if (-1 < [args.PLAYER1,args.PLAYER2].indexOf('human'))
-{
-    // init repl
-    repl = require('repl').start({
-        prompt: '',
-        eval: function(move, ctx, r, cb) {
-            move = String(move).trim().toLowerCase();
-            if ("undo" === move)
-            {
-                cb(null, "");
-                ctx.then("undo");
-            }
-            else
-            {
-                const match = move.match(/([a-h][1-8])\s*([a-h][1-8])\s*([qrbn])?/);
-                if (match)
-                {
-                    cb(null, "");
-                    ctx.then({from:match[1], to:match[2], promotion:match[3]});
-                }
-                else
-                {
-                    cb(null, "invalid move");
-                }
-            }
-        }
-    });
-}
-if (-1 < [args.PLAYER1,args.PLAYER2].indexOf('sunfish'))
+if (-1 < [args.PLAYER1.player, args.PLAYER2.player].indexOf('sunfish'))
 {
     // load sunfish engine
     engine.sunfish = require('./sunfish/sunfish.js');
@@ -380,7 +435,7 @@ if (-1 < [args.PLAYER1,args.PLAYER2].indexOf('sunfish'))
     };
 }
 
-if (-1 < [args.PLAYER1,args.PLAYER2].indexOf('stockfish'))
+if (-1 < [args.PLAYER1.player, args.PLAYER2.player].indexOf('stockfish'))
 {
     // load stockfish engine
     const path = require('path');
