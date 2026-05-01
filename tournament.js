@@ -22,6 +22,7 @@
 
 const args = (function parse_args() {
     const echo = console.log;
+
     const args = {
         PLAYER1:        'human',
         PLAYER2:        'sunfish',
@@ -171,12 +172,12 @@ const play = {
         engine.stockfish.sendCMD('position startpos moves ' + game.getMovesUpToNow().join(' '));
         engine.stockfish.sendCMD('go ' + (algorithm.stockfish.depth ? ('depth ' + String(algorithm.stockfish.depth)) : '') + (algorithm.stockfish.time ? ('wtime ' + String(algorithm.stockfish.time) + ' btime ' + String(algorithm.stockfish.time)) : ''));
     },
-    human: function(game, then) {
+    human: function(game, then, player) {
         if (!repl)
         {
             // init repl
             repl = require('repl').start({
-                prompt: /*game.whoseTurn().slice(0, 1)*/args.PLAYER1.name + ': ',
+                prompt: /*game.whoseTurn().slice(0, 1)*/player + ': ',
                 writer: function(out) {
                     return null != out ? String(out) : '';
                 },
@@ -287,20 +288,20 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
                     case 'WHITE':
                     if ('human' === WHITE.player)
                     {
-                        echo(board.toString("WHITE", "terminal"));
+                        echo(board.toString("terminal", "WHITE"));
                         repl_prompt(WHITE.name+': ');
                         repl_echo();
                     }
-                    play[WHITE.player](game, play_next);
+                    play[WHITE.player](game, play_next, WHITE.name);
                     break;
                     case 'BLACK':
                     if ('human' === BLACK.player)
                     {
-                        echo(board.toString("BLACK", "terminal"));
+                        echo(board.toString("terminal", "BLACK"));
                         repl_prompt(BLACK.name+': ');
                         repl_echo();
                     }
-                    play[BLACK.player](game, play_next);
+                    play[BLACK.player](game, play_next, BLACK.name);
                     break;
                 }
             }
@@ -313,20 +314,20 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
             case 'WHITE':
             if ('human' === WHITE.player)
             {
-                echo(board.toString("WHITE", "terminal"));
+                echo(board.toString("terminal", "WHITE"));
                 repl_prompt(WHITE.name+': ');
                 repl_echo();
             }
-            play[WHITE.player](game, play_next);
+            play[WHITE.player](game, play_next, WHITE.name);
             break;
             case 'BLACK':
             if ('human' === BLACK.player)
             {
-                echo(board.toString("BLACK", "terminal"));
+                echo(board.toString("terminal", "BLACK"));
                 repl_prompt(BLACK.name+': ');
                 repl_echo();
             }
-            play[BLACK.player](game, play_next);
+            play[BLACK.player](game, play_next, BLACK.name);
             break;
         }
     }
@@ -381,6 +382,17 @@ function tournament(match, matches_won_by_p1, draws, min_plies, max_plies, done)
     }
 }
 
+function echo(msg)
+{
+    if (repl)
+    {
+        repl.context.msg += msg + "\n";
+    }
+    else
+    {
+        console.log(msg);
+    }
+}
 function repl_prompt(prompt)
 {
     if (repl) repl.setPrompt(prompt);
@@ -391,17 +403,6 @@ function repl_echo()
     {
         repl.context.output(repl.context.msg);
         repl.context.msg = '';
-    }
-}
-function echo(msg)
-{
-    if (repl)
-    {
-        repl.context.msg += msg + "\n";
-    }
-    else
-    {
-        console.log(msg);
     }
 }
 function ready(f)

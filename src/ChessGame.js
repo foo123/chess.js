@@ -1084,7 +1084,7 @@ function ChessGame(options)
             var move = board.redo.pop(), redo = board.redo;
             self.doMove(xy2s(move[1], move[2]), xy2s(move[3], move[4]), PIECE[move[9]]);
             board.redo = redo;
-            return {from:xy2s(move[1], move[2]), to:xy2s(move[3], move[4])};
+            return {from:xy2s(move[1], move[2]), to:xy2s(move[3], move[4]), promotion:move[11] ? PIECE_SHORT[move[11]].toLowerCase() : null};
         }
     };
     self.noMove = function() {

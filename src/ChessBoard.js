@@ -18,18 +18,17 @@ else
 }('undefined' !== typeof self ? self : this, 'ChessBoard', function(undef) {
 "use strict";
 
-function ChessBoard(get_piece_at, container)
+function ChessBoard(get_piece_at)
 {
     var self = this;
 
-    if (!(self instanceof ChessBoard)) return new ChessBoard(get_piece_at, container);
+    if (!(self instanceof ChessBoard)) return new ChessBoard(get_piece_at);
     if ("function" !== typeof get_piece_at) get_piece_at = null;
 
     self.dispose = function() {
         get_piece_at = null;
-        container = null;
     };
-    self.toHTML = function(forPlayer)  {
+    self.toHTML = function(container, forPlayer)  {
         if (!container) return;
         forPlayer = String(forPlayer || "white").toLowerCase();
         var nt, nb, nl, nr, span, ii, i, jj, j, squares, square, piece;
@@ -110,33 +109,73 @@ function ChessBoard(get_piece_at, container)
                 squares.appendChild(square);
             }
         }
-        return container;
     };
-    self.toString = function(forPlayer, type) {
-        type = String(type || "string").toLowerCase();
+    self.toString = function(type, forPlayer, pieceset) {
+        type = String(type || "ascii").toLowerCase();
         forPlayer = String(forPlayer || "white").toLowerCase();
-        var ii, i,
-            jj, j, k,
-            square,
-            square_color,
-            piece,
-            symbol_string = {
-                pawn: "p",
-                rook: "r",
-                knight: "n",
-                bishop: "b",
-                queen: "q",
-                king: "k"
-            },
-            symbol_terminal = {
-                pawn: "\u2659",
-                rook: "\u265C",
-                knight: "\u265E",
-                bishop: "\u265D",
-                queen: "\u265B",
-                king: "\u265A"
-            },
-            out = '';
+        if (pieceset)
+        {
+            if (pieceset.white && pieceset.black)
+            {
+                // pass
+            }
+            else if (pieceset.pawn && pieceset.king)
+            {
+                pieceset = {white: pieceset, black: pieceset};
+            }
+            else
+            {
+                pieceset = null;
+            }
+        }
+        if (!pieceset)
+        {
+            if ("terminal" === type)
+            {
+                pieceset = {
+                    white: {
+                        pawn: "\u2659",
+                        rook: "\u265C",
+                        knight: "\u265E",
+                        bishop: "\u265D",
+                        queen: "\u265B",
+                        king: "\u265A"
+                    },
+                    black: {
+                        pawn: "\u2659",
+                        rook: "\u265C",
+                        knight: "\u265E",
+                        bishop: "\u265D",
+                        queen: "\u265B",
+                        king: "\u265A"
+                    }
+                };
+            }
+            else
+            {
+                pieceset = {
+                    white: {
+                        pawn: "P",
+                        rook: "R",
+                        knight: "N",
+                        bishop: "B",
+                        queen: "Q",
+                        king: "K"
+                    },
+                    black: {
+                        pawn: "p",
+                        rook: "r",
+                        knight: "n",
+                        bishop: "b",
+                        queen: "q",
+                        king: "k"
+                    }
+                };
+            }
+        }
+        var ii, i, jj, j, k,
+            square, square_color,
+            piece, out = '';
         out += '  ';
         for (i=0; i<8; ++i)
         {
@@ -171,11 +210,11 @@ function ChessBoard(get_piece_at, container)
                         {
                             if ("terminal" === type)
                             {
-                                out += "\x1b[" + ('black' === piece.color.toLowerCase() ? '30' : '37') + ";" + ('black' === square_color ? '41' : '43') + "m  " + (symbol_terminal[piece.type.toLowerCase()] || " ") + "  \x1b[0m";
+                                out += "\x1b[" + ('black' === piece.color.toLowerCase() ? '30' : '37') + ";" + ('black' === square_color ? '41' : '43') + "m  " + (pieceset[piece.color.toLowerCase()][piece.type.toLowerCase()] || ' ') + "  \x1b[0m";
                             }
                             else
                             {
-                                out += ('black' === square_color ? '# ' : '  ') + symbol_string[piece.type.toLowerCase()]['black' === piece.color.toLowerCase() ? 'toLowerCase' : 'toUpperCase']() + ('black' === square_color ? ' #' : '  ');
+                                out += ('black' === square_color ? '# ' : '  ') + (pieceset[piece.color.toLowerCase()][piece.type.toLowerCase()] || ' ') + ('black' === square_color ? ' #' : '  ');
                             }
                         }
                         else
@@ -202,11 +241,9 @@ function ChessBoard(get_piece_at, container)
         }
         return out;
     };
-    self.container = function() {
-        return container;
-    };
-    self.doMove = function(piece, square1, square2) {
-        if ((square1=get_square(square1)) && (square2=get_square(square2)) && (piece = get_piece(piece)))
+    self.doMove = function(square1, square2) {
+        var piece = null;
+        if (get_piece_at && (square1=get_square(square1)) && (square2=get_square(square2)) && (piece = get_piece(get_piece_at(square2.id))))
         {
             move(piece, square1, square2);
 
@@ -215,11 +252,11 @@ function ChessBoard(get_piece_at, container)
                 // handle en passants
                 if ('BLACK' === piece.color && '3' === square2.id.charAt(1))
                 {
-                    maybe_remove(get_square(square2.id.charAt(0)+'4'), get_piece_at(square2.id.charAt(0)+'4'));
+                    maybe_remove(get_square(square2.id.charAt(0)+'4'), get_piece(get_piece_at(square2.id.charAt(0)+'4')));
                 }
                 if ('WHITE' === piece.color && '6' === square2.id.charAt(1))
                 {
-                    maybe_remove(get_square(square2.id.charAt(0)+'5'), get_piece_at(square2.id.charAt(0)+'5'));
+                    maybe_remove(get_square(square2.id.charAt(0)+'5'), get_piece(get_piece_at(square2.id.charAt(0)+'5')));
                 }
             }
 
@@ -230,12 +267,12 @@ function ChessBoard(get_piece_at, container)
                     if ('g1' === square2.id)
                     {
                         // kingside castling white
-                        move(get_piece_at('f1'), get_square('h1'), get_square('f1'));
+                        move(get_piece(get_piece_at('f1')), get_square('h1'), get_square('f1'));
                     }
                     else if ('c1' === square2.id)
                     {
                         // queenside castling white
-                        move(get_piece_at('d1'), get_square('a1'), get_square('d1'));
+                        move(get_piece(get_piece_at('d1')), get_square('a1'), get_square('d1'));
                     }
                 }
                 else if ('e8' === square1.id)
@@ -243,19 +280,19 @@ function ChessBoard(get_piece_at, container)
                     if ('g8' === square2.id)
                     {
                         // kingside castling black
-                        move(get_piece_at('f8'), get_square('h8'), get_square('f8'));
+                        move(get_piece(get_piece_at('f8')), get_square('h8'), get_square('f8'));
                     }
                     else if ('c8' === square2.id)
                     {
                         // queenside castling black
-                        move(get_piece_at('d8'), get_square('a8'), get_square('d8'));
+                        move(get_piece(get_piece_at('d8')), get_square('a8'), get_square('d8'));
                     }
                 }
             }
         }
     };
     self.undoMove = function(piece, removed_piece, square1, square2) {
-        if ((square1=get_square(square1)) && (square2=get_square(square2)))
+        if (get_piece_at && (square1=get_square(square1)) && (square2=get_square(square2)))
         {
             empty(square1);
             empty(square2);
@@ -271,11 +308,11 @@ function ChessBoard(get_piece_at, container)
                     // handle en passants
                     if ('BLACK' === piece.color && '3' === square2.id.charAt(1))
                     {
-                        add(get_square(square2.id.charAt(0)+'4'), get_piece_at(square2.id.charAt(0)+'4'));
+                        add(get_square(square2.id.charAt(0)+'4'), get_piece(get_piece_at(square2.id.charAt(0)+'4')));
                     }
                     if ('WHITE' === piece.color && '6' === square2.id.charAt(1))
                     {
-                        add(get_square(square2.id.charAt(0)+'5'), get_piece_at(square2.id.charAt(0)+'5'));
+                        add(get_square(square2.id.charAt(0)+'5'), get_piece(get_piece_at(square2.id.charAt(0)+'5')));
                     }
                 }
 
@@ -286,12 +323,12 @@ function ChessBoard(get_piece_at, container)
                         if ('g1' === square2.id)
                         {
                             // kingside castling white
-                            move(get_piece_at('h1'), get_square('f1'), get_square('h1'));
+                            move(get_piece(get_piece_at('h1')), get_square('f1'), get_square('h1'));
                         }
                         else if ('c1' === square2.id)
                         {
                             // queenside castling white
-                            move(get_piece_at('a1'), get_square('d1'), get_square('a1'));
+                            move(get_piece(get_piece_at('a1')), get_square('d1'), get_square('a1'));
                         }
                     }
                     else if ('e8' === square1.id)
@@ -299,12 +336,12 @@ function ChessBoard(get_piece_at, container)
                         if ('g8' === square2.id)
                         {
                             // kingside castling black
-                            move(get_piece_at('h8'), get_square('f8'), get_square('h8'));
+                            move(get_piece(get_piece_at('h8')), get_square('f8'), get_square('h8'));
                         }
                         else if ('c8' === square2.id)
                         {
                             // queenside castling black
-                            move(get_piece_at('a8'), get_square('d8'), get_square('a8'));
+                            move(get_piece(get_piece_at('a8')), get_square('d8'), get_square('a8'));
                         }
                     }
                 }
@@ -318,7 +355,8 @@ function ChessBoard(get_piece_at, container)
             if (square !== start) attr(square, 'title', attr(square, 'title')+' (a move here from '+start.id+' is possible)');
         });
     };
-    self.clearPossibleMoves = function() {
+    self.clearPossibleMoves = function(container) {
+        if (!container) return;
         query('.square.active', container).forEach(function(square) {
             attr(removeClass(square, 'active'), 'title', attr(square, 'title').split(' (')[0]);
         });
@@ -329,7 +367,6 @@ ChessBoard.prototype = {
     dispose: null,
     toHTML: null,
     toString: null,
-    container: null,
     doMove: null,
     undoMove: null,
     showPossibleMoves: null,
@@ -379,7 +416,7 @@ function get_piece(piece)
                 break;
             }
         }
-        else if (!piece.type || (-1 === (['KING','QUEEN','BISHOP','KNIGHT','ROOK','PAWN']).indexOf(String(piece.type).toUpperCase())))
+        else if (!piece.type || (-1 === (['KING','QUEEN','BISHOP','KNIGHT','ROOK','PAWN']).indexOf(String(piece.type).toUpperCase())) || (-1 === (['WHITE','BLACK']).indexOf(String(piece.color).toUpperCase())))
         {
             piece = null;
         }
@@ -407,7 +444,7 @@ function add(square, piece)
 {
     addClass(square, ('BLACK' === piece.color ? 'b-' : 'w-') + piece.type.toLowerCase());
     addClass(square, 'piece');
-    attr(square, 'title', piece.color+' '+piece.type+' is on square '+square.id);
+    attr(square, 'title', piece.color+' '+piece.type+' on square '+square.id);
 }
 function move(piece, square1, square2)
 {
