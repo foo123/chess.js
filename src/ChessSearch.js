@@ -2,7 +2,7 @@
 *  ChessSearch
 *  Search algorithms to find best chess moves
 *  https://github.com/foo123/chess.js
-*  @VERSION: 0.10.0
+*  @VERSION: 0.11.0
 *
 **/
 !function(root, name, factory) {
@@ -174,7 +174,8 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
         {
             var i, now, uct, max = -INF,
                 count = n, newcount, test,
-                alpha = -opts.MATE, beta = opts.MATE,
+                alpha = -opts.MATE,
+                beta = opts.MATE,
                 score_up_to_now, score,
                 mov, move, best_move;
 
@@ -199,6 +200,7 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
             else if ("bns" === opts.algo)
             {
                 do {
+                    max = -INF;
                     best_move = [];
                     test = alpha + (beta - alpha) * (count - 1) / count;
                     newcount = 0;
@@ -213,20 +215,21 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
                         if (score >= test)
                         {
                             ++newcount;
-                            best_move.push(mov);
+                            if (score > max) {max = score; best_move = [mov];}
+                            else if (score === max) {best_move.push(mov);}
                         }
                         board.unmove(move);
                     }
 
                     // update alpha-beta range and count
-                    if (newcount > 1)
+                    if (newcount > 0)
                     {
-                        alpha = test > alpha ? test : (test+1);
+                        alpha = stdMath.max(test, alpha+1);
                         count = newcount;
                     }
                     else
                     {
-                        beta = test < beta ? test : (test-1);
+                        beta = stdMath.min(test, 0.9*beta);
                     }
                 } while (!((alpha+2 > beta) || (1 === newcount)));
             }
@@ -257,7 +260,7 @@ ChessSearch.HybridSearch[proto].bestMove = function(color) {
                         break;
 
                         default:
-                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now, -INF, INF);
+                        score = alphabeta(opts, board, opponent, 2, -1, moves_next[i], score_up_to_now, -opts.MATE, opts.MATE);
                         if (score > max) {max = score; best_move = [mov];}
                         else if (score === max) {best_move.push(mov);}
                         break;
@@ -405,7 +408,7 @@ function alphabeta(opts, board, color, depth, sgn, moves, score_up_to_now, alpha
 function mtdf(opts, board, color, depth, sgn, moves, score_up_to_now)
 {
     // MTD(f) Search algorithm
-    var value = opts.f || 0, lo = -INF, hi = INF, beta, iter = 0;
+    var value = opts.f || 0, lo = -opts.MATE, hi = opts.MATE, beta, iter = 0;
     if (!moves.length)
     {
         value = opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? OPPOSITE[color] : color) : score_up_to_now;
@@ -503,11 +506,24 @@ function mcts_playout(opts, board, color, depth, sgn, moves, score_up_to_now)
     {
         // return avg of all moves on remaining stages
         return moves.reduce(function(score, mov) {
-            var move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true);
-            score += opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : opts.eval_move(board, score_up_to_now, sgn, color, move, null);
+            if (opts.MATE === score) return score;
+            var move = board.move(mov[0], mov[1], mov[2], mov[3], mov[4], true),
+                curr_score = opts.eval_pos ? opts.eval_pos(board, 0 > sgn ? opponent : color) : opts.eval_move(board, score_up_to_now, sgn, color, move, null);
             board.unmove(move);
-            return score;
-        }, 0)/moves.length;
+            if (null == score)
+            {
+                return curr_score;
+            }
+            if (opts.MATE === stdMath.abs(score))
+            {
+                return opts.MATE === stdMath.abs(curr_score) ? stdMath.max(score, curr_score) : score;
+            }
+            if (opts.MATE === stdMath.abs(curr_score))
+            {
+                return curr_score;
+            }
+            return stdMath.max(score, curr_score);
+        }, null);
     }
     if (depth <= opts.depthUCT)
     {
@@ -533,7 +549,7 @@ function mcts_playout(opts, board, color, depth, sgn, moves, score_up_to_now)
     score = opts.eval_pos ? 0 : opts.eval_move(board, score_up_to_now, sgn, color, move, moves_next.length);
     if (depth >= opts.depthAB)
     {
-        value = alphabeta_rollout(opts, board, opponent, depth+1, -sgn, moves_next, score, -INF, INF);
+        value = alphabeta_rollout(opts, board, opponent, depth+1, -sgn, moves_next, score, -opts.MATE, opts.MATE);
     }
     else
     {
@@ -708,6 +724,7 @@ function eval_move(board, score_up_to_now, sgn, color, move, opponent_moves)
         close_to_opposite_king = d1 - d2,//(d2 > d1 ? (-d2) : (d2 < d1 ? (16-d2) : 0)),
         opponent_mobility = opponent_moves || 0
     ;
+    if (taken && (KING === taken.type)) return sgn*MATE;
     return (score_up_to_now || 0) + sgn*(f1*gain + f2*close_to_opposite_king - f3*opponent_mobility);
 }
 eval_move.MATE = MATE;
@@ -817,6 +834,6 @@ function is_function(x)
 }
 
 // export it
-ChessSearch.VERSION = "0.10.0";
+ChessSearch.VERSION = "0.11.0";
 return ChessSearch;
 });

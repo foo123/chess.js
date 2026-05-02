@@ -19,7 +19,7 @@ version: 1.0.0
 ## ChessSearch
 
 Implements various search methods for a best move in a game of chess.  
-version: 0.10.0
+version: 0.11.0
 
 Methods:
 * Alpha Beta Search
