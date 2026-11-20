@@ -31,7 +31,7 @@ Methods:
 A user-defined evaluation function can be used, else a custom-crafted evaluation function is used which, although simple and fast, produces quite good results (see `tournament.js` for some tentative results).  
 The evaluation function should explicitly declare in the options the value of MATE (`opts.MATE`), and should return values strictly between `-MATE` (losing) and `MATE` (winning) and only `MATE/2` for a draw.
 
-Related References:
+[Related References](/references):
 1. "An analysis of alpha-beta pruning", Donald E. Knuth, Ronald W. Moore, 1975
 2. "Best-first fixed-depth minimax algorithms", Aske Plaat, Jonathan Schaeffer, Wim Pijls, Arie de Bruin, 1996
 3. "Fuzzified Algorithm for Game Tree Search with Statistical and Analytical Evaluation", Dmitrijs Rutko, 2011
